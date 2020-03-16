@@ -1,0 +1,20 @@
+{
+  "name": "npm-test",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "start": "node src/index.js --myname liningxu",
+    "build": "webpack --env development --config build/webpack.base.js",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "author": "",
+  "license": "ISC",
+  "config": {
+    "myname": "liningxu3"
+  },
+  "dependencies": {
+    "webpack": "^3.10.0",
+    "yargs": "^15.3.0"
+  }
+}
