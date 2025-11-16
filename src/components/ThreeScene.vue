@@ -202,14 +202,13 @@ function createBeams() {
   const beamGroup = new THREE.Group()
   scene.add(beamGroup)
 
-  beamMaterial = new THREE.ShaderMaterial({
+    beamMaterial = new THREE.ShaderMaterial({
     transparent: true,
     depthWrite: false,
     blending: THREE.AdditiveBlending,
     uniforms: {
       uTopColor: { value: new THREE.Color(0x6de8ff) },
       uBottomColor: { value: new THREE.Color(0x0f2a6d) },
-      uTime: { value: 0 },
       uHeight: { value: 1 }
     },
     vertexShader: `
@@ -220,21 +219,20 @@ function createBeams() {
       }
     `,
     fragmentShader: `
-      uniform vec3 uTopColor;
-      uniform vec3 uBottomColor;
-      uniform float uTime;
-      uniform float uHeight;
-      varying float vY;
+        uniform vec3 uTopColor;
+        uniform vec3 uBottomColor;
+        uniform float uHeight;
+        varying float vY;
 
-      void main() {
-        float halfHeight = uHeight * 0.5;
-        float t = clamp((vY + halfHeight) / uHeight, 0.0, 1.0);
-        vec3 color = mix(uTopColor, uBottomColor, t);
-        float pulse = 0.55 + 0.35 * sin(uTime * 4.0 + t * 12.0);
-        float alpha = smoothstep(0.0, 0.6, 1.0 - abs(t - 0.5) * 2.0);
-        gl_FragColor = vec4(color * pulse, alpha);
-        if (gl_FragColor.a < 0.05) discard;
-      }
+        void main() {
+          float halfHeight = uHeight * 0.5;
+          float t = clamp((vY + halfHeight) / uHeight, 0.0, 1.0);
+          vec3 color = mix(uTopColor, uBottomColor, t);
+          float intensity = mix(1.2, 0.15, t);
+          float alpha = smoothstep(0.0, 0.7, 1.0 - t);
+          gl_FragColor = vec4(color * intensity, alpha);
+          if (gl_FragColor.a < 0.05) discard;
+        }
     `
   })
 
@@ -353,9 +351,6 @@ function animate() {
   animationId = requestAnimationFrame(animate)
 
   const elapsed = clock.getElapsedTime()
-  if (beamMaterial) {
-    beamMaterial.uniforms.uTime.value = elapsed
-  }
   if (glowMesh?.visible && glowMaterial) {
     glowMaterial.opacity = 0.35 + Math.sin(elapsed * 3) * 0.15
   }
