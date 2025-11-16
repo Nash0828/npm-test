@@ -218,7 +218,7 @@ function createBeams() {
         gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
       }
     `,
-    fragmentShader: `
+      fragmentShader: `
         uniform vec3 uTopColor;
         uniform vec3 uBottomColor;
         uniform float uHeight;
@@ -227,9 +227,9 @@ function createBeams() {
         void main() {
           float halfHeight = uHeight * 0.5;
           float t = clamp((vY + halfHeight) / uHeight, 0.0, 1.0);
-          vec3 color = mix(uTopColor, uBottomColor, t);
-          float intensity = mix(1.2, 0.15, t);
-          float alpha = smoothstep(0.0, 0.7, 1.0 - t);
+          vec3 color = mix(uBottomColor, uTopColor, t);
+          float intensity = mix(0.2, 1.25, t);
+          float alpha = smoothstep(0.0, 0.7, t);
           gl_FragColor = vec4(color * intensity, alpha);
           if (gl_FragColor.a < 0.05) discard;
         }
