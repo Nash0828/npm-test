@@ -16,6 +16,13 @@ const DIMENSIONS = {
   depth: 10
 }
 
+const EDGE_EFFECT = {
+  segments: 48,
+  speed: 0.65,
+  baseColor: new THREE.Color('#4d5a68'),
+  highlightColor: new THREE.Color('#c9f1ff')
+}
+
 let renderer
 let scene
 let camera
@@ -23,6 +30,7 @@ let animationId
 let resizeObserver
 let planeGroup
 let labelTexture
+let edgeLines = []
 
 onMounted(() => {
   initScene()
@@ -111,13 +119,66 @@ function createEdgeLines() {
     [halfWidth, topY, -halfDepth, halfWidth, topY, halfDepth] // right
   ]
 
-  return points.map(([x1, y1, z1, x2, y2, z2]) => {
-    const geometry = new THREE.BufferGeometry().setFromPoints([
+  edgeLines = points.map(([x1, y1, z1, x2, y2, z2]) => {
+    const geometry = createSegmentedLineGeometry(
       new THREE.Vector3(x1, y1, z1),
-      new THREE.Vector3(x2, y2, z2)
-    ])
-    const material = new THREE.LineBasicMaterial({ color: 0xffffff })
+      new THREE.Vector3(x2, y2, z2),
+      EDGE_EFFECT.segments
+    )
+
+    const colorAttr = new Float32Array(geometry.attributes.position.count * 3)
+    geometry.setAttribute('color', new THREE.BufferAttribute(colorAttr, 3))
+
+    const material = new THREE.LineBasicMaterial({
+      vertexColors: true,
+      transparent: true,
+      opacity: 0.85,
+      linewidth: 1
+    })
+
     return new THREE.Line(geometry, material)
+  })
+
+  return edgeLines
+}
+
+function createSegmentedLineGeometry(start, end, segments) {
+  const positions = []
+  for (let i = 0; i <= segments; i += 1) {
+    const t = i / segments
+    positions.push(
+      new THREE.Vector3(
+        THREE.MathUtils.lerp(start.x, end.x, t),
+        THREE.MathUtils.lerp(start.y, end.y, t),
+        THREE.MathUtils.lerp(start.z, end.z, t)
+      )
+    )
+  }
+
+  return new THREE.BufferGeometry().setFromPoints(positions)
+}
+
+function updateEdgeLines(time) {
+  if (!edgeLines.length) return
+
+  edgeLines.forEach((line, index) => {
+    const colorAttr = line.geometry.getAttribute('color')
+    if (!colorAttr) return
+
+    for (let i = 0; i < colorAttr.count; i += 1) {
+      const progress = colorAttr.count > 1 ? i / (colorAttr.count - 1) : 0
+      const wave =
+        Math.sin(time * EDGE_EFFECT.speed + progress * 5 + index * 0.8) * 0.5 + 0.5
+      const intensity = THREE.MathUtils.smoothstep(wave, 0.15, 0.85)
+      const color = EDGE_EFFECT.baseColor.clone().lerp(EDGE_EFFECT.highlightColor, intensity)
+      colorAttr.setXYZ(i, color.r, color.g, color.b)
+    }
+
+    colorAttr.needsUpdate = true
+
+    if (line.material && 'opacity' in line.material) {
+      line.material.opacity = 0.65 + Math.sin(time * EDGE_EFFECT.speed + index) * 0.1
+    }
   })
 }
 
@@ -157,6 +218,7 @@ function animate() {
     planeGroup.rotation.y = Math.sin(Date.now() * 0.0002) * 0.15
   }
 
+  updateEdgeLines(performance.now() * 0.001)
   renderer?.render(scene, camera)
 }
 
@@ -195,6 +257,7 @@ function cleanup() {
   scene = null
   camera = null
   planeGroup = null
+  edgeLines = []
 }
 </script>
 
