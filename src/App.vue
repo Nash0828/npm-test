@@ -11,12 +11,17 @@
     <div class="hud status-panel">
       Hover Node: {{ hoverNode }}
     </div>
+
+    <section class="hud plane-panel">
+      <MicroservicePlane />
+    </section>
   </div>
 </template>
 
 <script setup>
 import { ref } from 'vue'
 import ThreeScene from './components/ThreeScene.vue'
+import MicroservicePlane from './components/MicroservicePlane.vue'
 
 const hoverNode = ref('---')
 
@@ -79,5 +84,24 @@ function handleHoverChange(name) {
   font-size: 13px;
   color: #9ad8ff;
   letter-spacing: 0.03em;
+}
+
+.plane-panel {
+  bottom: 24px;
+  right: 24px;
+  width: 340px;
+  height: 240px;
+  padding: 0;
+  pointer-events: none;
+  border-radius: 18px;
+  overflow: hidden;
+  background: rgba(3, 7, 17, 0.9);
+  box-shadow: 0 20px 50px rgba(2, 8, 20, 0.55);
+}
+
+.plane-panel :deep(.plane-wrapper) {
+  width: 100%;
+  height: 100%;
+  pointer-events: auto;
 }
 </style>
