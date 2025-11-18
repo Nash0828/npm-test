@@ -1,107 +1,92 @@
 <template>
-  <div class="app-root">
-    <ThreeScene class="scene-layer" @hover-change="handleHoverChange" />
+  <div class="app-shell">
+    <header class="app-header">
+      <p class="logo">Beam Network</p>
+      <nav class="nav">
+        <RouterLink
+          to="/scene"
+          class="nav-link"
+          active-class="is-active"
+        >
+          三维场景
+        </RouterLink>
+        <RouterLink
+          to="/microservice-plane"
+          class="nav-link"
+          active-class="is-active"
+        >
+          服务编排平面
+        </RouterLink>
+      </nav>
+    </header>
 
-    <section class="hud info-panel">
-      <p class="title">Beam Network Demo</p>
-      <p>悬浮任意上层节点，启动下行光束</p>
-      <p>拖动可调整视角</p>
-    </section>
-
-    <div class="hud status-panel">
-      Hover Node: {{ hoverNode }}
-    </div>
-
-    <section class="hud plane-panel">
-      <MicroservicePlane />
-    </section>
+    <main class="app-content">
+      <RouterView />
+    </main>
   </div>
 </template>
 
 <script setup>
-import { ref } from 'vue'
-import ThreeScene from './components/ThreeScene.vue'
-import MicroservicePlane from './components/MicroservicePlane.vue'
-
-const hoverNode = ref('---')
-
-function handleHoverChange(name) {
-  hoverNode.value = name ?? '---'
-}
+import { RouterLink, RouterView } from 'vue-router'
 </script>
 
 <style scoped>
-.app-root {
-  position: relative;
-  width: 100%;
+.app-shell {
+  display: flex;
+  flex-direction: column;
   min-height: 100vh;
+  width: 100%;
   background: #030711;
-  overflow: hidden;
-}
-
-.scene-layer {
-  width: 100%;
-  height: 100vh;
-}
-
-.hud {
-  position: fixed;
   color: #e5f4ff;
-  font-size: 14px;
-  line-height: 1.4;
-  pointer-events: none;
-  z-index: 10;
 }
 
-.info-panel {
-  top: 20px;
-  left: 20px;
-  padding: 12px 18px;
-  border-radius: 12px;
-  background: rgba(3, 7, 17, 0.65);
-  backdrop-filter: blur(6px);
-  box-shadow: 0 12px 30px rgba(12, 34, 64, 0.45);
+.app-header {
+  position: sticky;
+  top: 0;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 16px 32px;
+  background: rgba(3, 7, 17, 0.85);
+  backdrop-filter: blur(12px);
+  box-shadow: 0 6px 20px rgba(2, 8, 20, 0.45);
+  z-index: 20;
 }
 
-.title {
+.logo {
   margin: 0;
-  font-size: 16px;
+  font-size: 18px;
   font-weight: 600;
-  letter-spacing: 0.02em;
+  letter-spacing: 0.04em;
 }
 
-.title + p {
-  margin-top: 10px;
+.nav {
+  display: flex;
+  gap: 12px;
 }
 
-.status-panel {
-  bottom: 24px;
-  left: 50%;
-  transform: translateX(-50%);
-  padding: 8px 16px;
-  background: rgba(6, 17, 34, 0.7);
-  border-radius: 999px;
-  font-size: 13px;
+.nav-link {
+  text-decoration: none;
   color: #9ad8ff;
-  letter-spacing: 0.03em;
+  padding: 8px 16px;
+  border-radius: 999px;
+  border: 1px solid transparent;
+  transition: all 0.2s ease;
 }
 
-.plane-panel {
-  bottom: 24px;
-  right: 24px;
-  width: 340px;
-  height: 240px;
-  padding: 0;
-  pointer-events: none;
-  border-radius: 18px;
-  overflow: hidden;
-  background: rgba(3, 7, 17, 0.9);
-  box-shadow: 0 20px 50px rgba(2, 8, 20, 0.55);
+.nav-link:hover {
+  color: #e5f4ff;
+  border-color: rgba(154, 216, 255, 0.4);
 }
 
-.plane-panel :deep(.plane-wrapper) {
-  width: 100%;
-  height: 100%;
-  pointer-events: auto;
+.nav-link.is-active {
+  background: linear-gradient(120deg, #1e84ff, #00c2ff);
+  color: #030711;
+  border-color: transparent;
+  box-shadow: 0 8px 18px rgba(0, 150, 255, 0.35);
+}
+
+.app-content {
+  flex: 1;
 }
 </style>
