@@ -7,11 +7,12 @@
 <script setup>
 import { onMounted, onBeforeUnmount, ref, watch } from 'vue'
 import * as THREE from 'three'
+import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js'
 
 const props = defineProps({
   linkWidth: {
     type: Number,
-    default: 0.8,
+    default: 0.35,
   },
 })
 
@@ -22,6 +23,7 @@ let scene
 let camera
 let animationId
 let resizeObserver
+let controls
 
 const nodeStates = []
 const linkStates = []
@@ -29,7 +31,6 @@ const nodeMap = new Map()
 const disposableTextures = []
 
 const PLANE_Y = 0
-const LABEL_HEIGHT = 1.35
 const NODE_BASE_SCALE = 2.8
 const ZOOM = {
   min: 0.65,
@@ -120,6 +121,7 @@ function initScene() {
   createBackdrop()
   createNodes()
   createLinks()
+  createControls()
 
   resizeObserver = new ResizeObserver(() => resizeRenderer())
   resizeObserver.observe(canvas)
@@ -135,6 +137,21 @@ function createCamera(canvas) {
   camera.position.set(0, 14, 28)
   camera.up.set(0, 1, 0)
   camera.lookAt(0, 0, 0)
+}
+
+function createControls() {
+  if (!camera || !renderer) return
+  controls?.dispose()
+  controls = new OrbitControls(camera, renderer.domElement)
+  controls.enableDamping = true
+  controls.dampingFactor = 0.08
+  controls.enablePan = false
+  controls.enableZoom = false
+  controls.rotateSpeed = 0.55
+  controls.minPolarAngle = Math.PI / 4
+  controls.maxPolarAngle = Math.PI / 1.85
+  controls.target.set(0, 0, 0)
+  controls.update()
 }
 
 function createLights() {
@@ -176,12 +193,6 @@ function createNodes() {
     scene.add(nodeSprite)
     disposableTextures.push(nodeTexture)
 
-    const { sprite: labelSprite, texture: labelTexture } = createLabelSprite(node.label)
-    labelSprite.position.set(0, PLANE_Y + LABEL_HEIGHT, 0)
-    labelSprite.renderOrder = 11
-    scene.add(labelSprite)
-    disposableTextures.push(labelTexture)
-
     const angle = random() * Math.PI * 2
     const radius = 3.5 + random() * 4.5
     const position = new THREE.Vector3(Math.cos(angle) * radius, 0, Math.sin(angle) * radius)
@@ -191,7 +202,6 @@ function createNodes() {
     const state = {
       ...node,
       sprite: nodeSprite,
-      label: labelSprite,
       position,
       velocity,
       force,
@@ -203,7 +213,7 @@ function createNodes() {
 }
 
 function createLinks() {
-  const shaftGeometry = new THREE.CylinderGeometry(0.5, 0.5, 1, 28, 1, true)
+  const shaftGeometry = new THREE.CylinderGeometry(0.22, 0.22, 1, 28, 1, true)
   shaftGeometry.rotateZ(Math.PI / 2)
   const shaftMaterial = new THREE.MeshStandardMaterial({
     color: 0x5ed3ff,
@@ -213,7 +223,7 @@ function createLinks() {
     opacity: 0.92,
   })
 
-  const arrowGeometry = new THREE.ConeGeometry(0.6, 1, 32, 1)
+  const arrowGeometry = new THREE.ConeGeometry(0.4, 1, 32, 1)
   arrowGeometry.rotateZ(-Math.PI / 2)
   const arrowMaterial = new THREE.MeshStandardMaterial({
     color: 0xc2f6ff,
@@ -254,6 +264,7 @@ function animate() {
   updateNodes()
   updateLinks()
   updateCameraZoom()
+  controls?.update()
   renderer?.render(scene, camera)
 }
 
@@ -321,9 +332,6 @@ function stepSimulation() {
 function updateNodes() {
   nodeStates.forEach((node) => {
     node.sprite.position.set(node.position.x, PLANE_Y + 0.05, node.position.z)
-
-    const labelOffset = LABEL_HEIGHT + node.radius * 0.8
-    node.label.position.set(node.position.x, PLANE_Y + labelOffset, node.position.z)
   })
 }
 
@@ -343,19 +351,27 @@ function updateLinks() {
 
     link.group.visible = true
     const yaw = Math.atan2(tempDir.z, tempDir.x)
-    link.group.position.set(source.position.x, PLANE_Y + 0.01, source.position.z)
+    const dirX = tempDir.x / length
+    const dirZ = tempDir.z / length
+    const sourceOffset = Math.max(source.sprite.scale.x * 0.35, 0.25)
+    const targetOffset = Math.max(target.sprite.scale.x * 0.35, 0.35)
+    const adjustedLength = Math.max(length - sourceOffset - targetOffset, 0.2)
+    const startX = source.position.x + dirX * sourceOffset
+    const startZ = source.position.z + dirZ * sourceOffset
+
+    link.group.position.set(startX, PLANE_Y + 0.01, startZ)
     link.group.rotation.set(0, yaw, 0)
 
-    const headLength = THREE.MathUtils.clamp(length * 0.2, 0.9, 3.4)
-    const shaftLength = Math.max(length - headLength, headLength * 0.55)
-    const thickness = Math.max(currentLinkWidth, 0.25)
+    const headLength = THREE.MathUtils.clamp(adjustedLength * 0.25, 0.55, 2.4)
+    const shaftLength = Math.max(adjustedLength - headLength, headLength * 0.4)
+    const thickness = Math.max(currentLinkWidth, 0.12)
 
     link.shaft.scale.set(shaftLength, thickness, thickness)
     link.shaft.position.set(shaftLength / 2, 0, 0)
 
-    const headRadius = Math.max(thickness * 0.75, 0.4)
+    const headRadius = Math.max(thickness * 0.9, 0.28)
     link.arrow.scale.set(headLength, headRadius, headRadius)
-    link.arrow.position.set(length - headLength / 2, 0, 0)
+    link.arrow.position.set(adjustedLength - headLength / 2, 0, 0)
   })
 }
 
@@ -380,6 +396,8 @@ function cleanup() {
   cancelAnimationFrame(animationId)
   resizeObserver?.disconnect()
   canvasRef.value?.removeEventListener('wheel', handleWheel)
+  controls?.dispose()
+  controls = null
 
   if (scene) {
     scene.traverse((obj) => {
@@ -447,54 +465,6 @@ function createNodeSprite(node) {
   return { sprite, texture }
 }
 
-function createLabelSprite(text) {
-  const canvas = document.createElement('canvas')
-  canvas.width = 256
-  canvas.height = 128
-  const ctx = canvas.getContext('2d')
-  if (ctx) {
-    ctx.clearRect(0, 0, canvas.width, canvas.height)
-    ctx.fillStyle = 'rgba(3, 10, 20, 0.55)'
-    ctx.strokeStyle = 'rgba(111, 191, 255, 0.55)'
-    ctx.lineWidth = 2
-    roundRect(ctx, 20, 36, 216, 56, 18)
-    ctx.font = '28px "Inter", "Noto Sans SC", sans-serif'
-    ctx.fillStyle = '#e5f4ff'
-    ctx.textAlign = 'center'
-    ctx.textBaseline = 'middle'
-    ctx.fillText(text, canvas.width / 2, canvas.height / 2 + 4)
-  }
-
-  const texture = new THREE.CanvasTexture(canvas)
-  texture.needsUpdate = true
-
-  const material = new THREE.SpriteMaterial({
-    map: texture,
-    transparent: true,
-  })
-
-  const sprite = new THREE.Sprite(material)
-  sprite.scale.set(3.4, 1.5, 1)
-
-  return { sprite, texture }
-}
-
-function roundRect(ctx, x, y, width, height, radius) {
-  const r = Math.min(radius, height / 2, width / 2)
-  ctx.beginPath()
-  ctx.moveTo(x + r, y)
-  ctx.lineTo(x + width - r, y)
-  ctx.quadraticCurveTo(x + width, y, x + width, y + r)
-  ctx.lineTo(x + width, y + height - r)
-  ctx.quadraticCurveTo(x + width, y + height, x + width - r, y + height)
-  ctx.lineTo(x + r, y + height)
-  ctx.quadraticCurveTo(x, y + height, x, y + height - r)
-  ctx.lineTo(x, y + r)
-  ctx.quadraticCurveTo(x, y, x + r, y)
-  ctx.closePath()
-  ctx.fill()
-  ctx.stroke()
-}
 
 function createDeterministicRandom(seed) {
   const seedGen = xmur3(seed)
