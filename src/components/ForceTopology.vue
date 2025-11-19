@@ -32,6 +32,7 @@ const disposableTextures = []
 
 const PLANE_Y = 0
 const NODE_BASE_SCALE = 2.8
+const NODE_EDGE_PADDING = 0.12
 const ZOOM = {
   min: 0.65,
   max: 2.1,
@@ -270,6 +271,7 @@ function animate() {
 
 function stepSimulation() {
   nodeStates.forEach((node) => {
+    // 每帧先重置所有节点的累计力，后续叠加各类力场
     node.force.set(0, 0, 0)
   })
 
@@ -278,6 +280,7 @@ function stepSimulation() {
       const nodeA = nodeStates[i]
       const nodeB = nodeStates[j]
 
+      // 朴素 O(n^2) 排斥：节点越近，排斥越强，防止过度重叠
       tempDir.copy(nodeA.position).sub(nodeB.position)
       const distanceSq = Math.max(tempDir.lengthSq(), 0.04)
       const strength = (SIMULATION.repulsion * (nodeA.mass + nodeB.mass)) / distanceSq
@@ -294,6 +297,7 @@ function stepSimulation() {
     const target = link.target
     if (!source || !target) return
 
+    // Hooke 式弹簧保持链路长度在理想范围，避免节点飘散过远或挤压
     tempDir.copy(target.position).sub(source.position)
     const distance = Math.max(tempDir.length(), 0.001)
     const desired = SIMULATION.linkDistance
@@ -307,6 +311,7 @@ function stepSimulation() {
   })
 
   nodeStates.forEach((node) => {
+    // 将节点轻轻拉回坐标原点，防止整体飘出取景范围
     tempForce.copy(node.position).multiplyScalar(-SIMULATION.centering)
     node.force.add(tempForce)
 
@@ -353,17 +358,22 @@ function updateLinks() {
     const yaw = Math.atan2(tempDir.z, tempDir.x)
     const dirX = tempDir.x / length
     const dirZ = tempDir.z / length
-    const sourceOffset = Math.max(source.sprite.scale.x * 0.35, 0.25)
-    const targetOffset = Math.max(target.sprite.scale.x * 0.35, 0.35)
-    const adjustedLength = Math.max(length - sourceOffset - targetOffset, 0.2)
+
+    // 沿连线方向裁剪掉节点贴图半径，确保箭头停靠在节点边缘而非悬空
+    const sourceOffset = getNodeEdgeOffset(source)
+    const targetOffset = getNodeEdgeOffset(target)
+    const adjustedLength = Math.max(length - sourceOffset - targetOffset, 0.14)
     const startX = source.position.x + dirX * sourceOffset
     const startZ = source.position.z + dirZ * sourceOffset
 
     link.group.position.set(startX, PLANE_Y + 0.01, startZ)
     link.group.rotation.set(0, yaw, 0)
 
-    const headLength = THREE.MathUtils.clamp(adjustedLength * 0.25, 0.55, 2.4)
-    const shaftLength = Math.max(adjustedLength - headLength, headLength * 0.4)
+    const headLength = THREE.MathUtils.clamp(adjustedLength * 0.3, 0.5, 2.2)
+    const shaftLength = Math.max(
+      adjustedLength - headLength,
+      Math.min(adjustedLength * 0.65, headLength * 2.4)
+    )
     const thickness = Math.max(currentLinkWidth, 0.12)
 
     link.shaft.scale.set(shaftLength, thickness, thickness)
@@ -507,6 +517,13 @@ function updateCameraZoom() {
   currentZoom += delta * ZOOM.lerp
   camera.zoom = currentZoom
   camera.updateProjectionMatrix()
+}
+
+function getNodeEdgeOffset(node) {
+  if (!node?.sprite) return 0.4
+  const spriteDiameter = node.sprite.scale.x
+  const visualRadius = spriteDiameter * 0.5
+  return THREE.MathUtils.clamp(visualRadius - NODE_EDGE_PADDING, 0.25, 1.8)
 }
 </script>
 
