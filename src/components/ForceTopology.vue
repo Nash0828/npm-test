@@ -31,6 +31,12 @@ const disposableTextures = []
 const PLANE_Y = 0
 const LABEL_HEIGHT = 1.35
 const NODE_BASE_SCALE = 2.8
+const ZOOM = {
+  min: 0.65,
+  max: 2.1,
+  wheelSpeed: 0.0015,
+  lerp: 0.12,
+}
 
 const random = createDeterministicRandom('force-topology-plane')
 
@@ -76,6 +82,8 @@ const LINKS = [
 ]
 
 let currentLinkWidth = props.linkWidth
+let targetZoom = 1
+let currentZoom = 1
 
 onMounted(() => {
   initScene()
@@ -108,6 +116,7 @@ function initScene() {
   scene = new THREE.Scene()
 
   createCamera(canvas)
+  createLights()
   createBackdrop()
   createNodes()
   createLinks()
@@ -115,6 +124,7 @@ function initScene() {
   resizeObserver = new ResizeObserver(() => resizeRenderer())
   resizeObserver.observe(canvas)
   resizeRenderer()
+  canvas.addEventListener('wheel', handleWheel, { passive: false })
 
   animate()
 }
@@ -125,6 +135,15 @@ function createCamera(canvas) {
   camera.position.set(0, 14, 28)
   camera.up.set(0, 1, 0)
   camera.lookAt(0, 0, 0)
+}
+
+function createLights() {
+  const hemiLight = new THREE.HemisphereLight(0xb7e3ff, 0x040814, 0.92)
+  scene.add(hemiLight)
+
+  const directional = new THREE.DirectionalLight(0xffffff, 0.65)
+  directional.position.set(14, 24, 10)
+  scene.add(directional)
 }
 
 function createBackdrop() {
@@ -184,26 +203,29 @@ function createNodes() {
 }
 
 function createLinks() {
-  const shaftGeometry = new THREE.PlaneGeometry(1, 1)
-  const shaftMaterial = new THREE.MeshBasicMaterial({
-    color: 0x4ba5ff,
+  const shaftGeometry = new THREE.CylinderGeometry(0.5, 0.5, 1, 28, 1, true)
+  shaftGeometry.rotateZ(Math.PI / 2)
+  const shaftMaterial = new THREE.MeshStandardMaterial({
+    color: 0x5ed3ff,
+    roughness: 0.35,
+    metalness: 0.3,
     transparent: true,
-    opacity: 0.78,
-    side: THREE.DoubleSide,
+    opacity: 0.92,
   })
 
-  const arrowGeometry = createArrowHeadGeometry()
-  const arrowMaterial = new THREE.MeshBasicMaterial({
-    color: 0xb9f6ff,
+  const arrowGeometry = new THREE.ConeGeometry(0.6, 1, 32, 1)
+  arrowGeometry.rotateZ(-Math.PI / 2)
+  const arrowMaterial = new THREE.MeshStandardMaterial({
+    color: 0xc2f6ff,
+    roughness: 0.25,
+    metalness: 0.35,
     transparent: true,
-    opacity: 0.95,
-    side: THREE.DoubleSide,
+    opacity: 0.98,
   })
 
   LINKS.forEach((link) => {
     const group = new THREE.Group()
     group.position.y = PLANE_Y + 0.01
-    group.rotation.x = -Math.PI / 2
 
     const shaft = new THREE.Mesh(shaftGeometry, shaftMaterial.clone())
     shaft.renderOrder = 1
@@ -226,22 +248,12 @@ function createLinks() {
   })
 }
 
-function createArrowHeadGeometry() {
-  const shape = new THREE.Shape()
-  shape.moveTo(0, 0)
-  shape.lineTo(-1, 0.6)
-  shape.lineTo(-1, -0.6)
-  shape.lineTo(0, 0)
-
-  const geometry = new THREE.ShapeGeometry(shape)
-  return geometry
-}
-
 function animate() {
   animationId = requestAnimationFrame(animate)
   stepSimulation()
   updateNodes()
   updateLinks()
+  updateCameraZoom()
   renderer?.render(scene, camera)
 }
 
@@ -332,18 +344,18 @@ function updateLinks() {
     link.group.visible = true
     const yaw = Math.atan2(tempDir.z, tempDir.x)
     link.group.position.set(source.position.x, PLANE_Y + 0.01, source.position.z)
-    link.group.rotation.set(-Math.PI / 2, yaw, 0)
+    link.group.rotation.set(0, yaw, 0)
 
-    const headLength = THREE.MathUtils.clamp(length * 0.2, 0.8, 3)
-    const shaftLength = Math.max(length - headLength, headLength * 0.6)
-    const width = Math.max(currentLinkWidth, 0.2)
+    const headLength = THREE.MathUtils.clamp(length * 0.2, 0.9, 3.4)
+    const shaftLength = Math.max(length - headLength, headLength * 0.55)
+    const thickness = Math.max(currentLinkWidth, 0.25)
 
-    link.shaft.scale.set(shaftLength, width, 1)
+    link.shaft.scale.set(shaftLength, thickness, thickness)
     link.shaft.position.set(shaftLength / 2, 0, 0)
 
-    const headWidth = width * 1.6
-    link.arrow.scale.set(headLength, headWidth, 1)
-    link.arrow.position.set(length - headLength * (2 / 3), 0, 0)
+    const headRadius = Math.max(thickness * 0.75, 0.4)
+    link.arrow.scale.set(headLength, headRadius, headRadius)
+    link.arrow.position.set(length - headLength / 2, 0, 0)
   })
 }
 
@@ -367,6 +379,7 @@ function resizeRenderer() {
 function cleanup() {
   cancelAnimationFrame(animationId)
   resizeObserver?.disconnect()
+  canvasRef.value?.removeEventListener('wheel', handleWheel)
 
   if (scene) {
     scene.traverse((obj) => {
@@ -392,6 +405,8 @@ function cleanup() {
   nodeStates.length = 0
   linkStates.length = 0
   nodeMap.clear()
+  targetZoom = 1
+  currentZoom = 1
 }
 
 function createNodeSprite(node) {
@@ -508,6 +523,20 @@ function mulberry32(a) {
     t ^= t + Math.imul(t ^ (t >>> 7), 61 | t)
     return ((t ^ (t >>> 14)) >>> 0) / 4294967296
   }
+}
+
+function handleWheel(event) {
+  event.preventDefault()
+  targetZoom = THREE.MathUtils.clamp(targetZoom - event.deltaY * ZOOM.wheelSpeed, ZOOM.min, ZOOM.max)
+}
+
+function updateCameraZoom() {
+  if (!camera) return
+  const delta = targetZoom - currentZoom
+  if (Math.abs(delta) < 0.0001) return
+  currentZoom += delta * ZOOM.lerp
+  camera.zoom = currentZoom
+  camera.updateProjectionMatrix()
 }
 </script>
 
