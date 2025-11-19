@@ -17,6 +17,13 @@
         >
           服务编排平面
         </RouterLink>
+        <RouterLink
+          to="/topology"
+          class="nav-link"
+          active-class="is-active"
+        >
+          二维拓扑
+        </RouterLink>
       </nav>
     </header>
 
