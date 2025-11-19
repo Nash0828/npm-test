@@ -28,6 +28,12 @@ const linkStates = []
 const nodeMap = new Map()
 const disposableTextures = []
 
+const PLANE_Y = 0
+const LABEL_HEIGHT = 1.35
+const NODE_BASE_SCALE = 2.8
+
+const random = createDeterministicRandom('force-topology-plane')
+
 const tempForce = new THREE.Vector3()
 const tempDir = new THREE.Vector3()
 
@@ -54,19 +60,19 @@ const NODES = [
 ]
 
 const LINKS = [
-  { source: 'gateway', target: 'auth', distance: 5.5 },
-  { source: 'gateway', target: 'order', distance: 6 },
-  { source: 'auth', target: 'order', distance: 4.2 },
-  { source: 'order', target: 'payment', distance: 4.6 },
-  { source: 'order', target: 'inventory', distance: 4.6 },
-  { source: 'order', target: 'shipping', distance: 5 },
-  { source: 'payment', target: 'monitor', distance: 4.2 },
-  { source: 'payment', target: 'recommend', distance: 5 },
-  { source: 'inventory', target: 'monitor', distance: 4.4 },
-  { source: 'inventory', target: 'recommend', distance: 4.8 },
-  { source: 'user', target: 'order', distance: 4.6 },
-  { source: 'user', target: 'recommend', distance: 4.2 },
-  { source: 'shipping', target: 'monitor', distance: 4.4 },
+  { source: 'gateway', target: 'auth' },
+  { source: 'gateway', target: 'order' },
+  { source: 'auth', target: 'order' },
+  { source: 'order', target: 'payment' },
+  { source: 'order', target: 'inventory' },
+  { source: 'order', target: 'shipping' },
+  { source: 'payment', target: 'monitor' },
+  { source: 'payment', target: 'recommend' },
+  { source: 'inventory', target: 'monitor' },
+  { source: 'inventory', target: 'recommend' },
+  { source: 'user', target: 'order' },
+  { source: 'user', target: 'recommend' },
+  { source: 'shipping', target: 'monitor' },
 ]
 
 let currentLinkWidth = props.linkWidth
@@ -115,66 +121,58 @@ function initScene() {
 
 function createCamera(canvas) {
   const aspect = (canvas.clientWidth || 1) / (canvas.clientHeight || 1)
-  const viewSize = 14
-  const halfHeight = viewSize / 2
-  const halfWidth = halfHeight * aspect
-
-  camera = new THREE.OrthographicCamera(-halfWidth, halfWidth, halfHeight, -halfHeight, 0.1, 100)
-  camera.position.set(0, 0, 20)
+  camera = new THREE.PerspectiveCamera(46, aspect, 0.1, 200)
+  camera.position.set(0, 14, 28)
+  camera.up.set(0, 1, 0)
   camera.lookAt(0, 0, 0)
 }
 
 function createBackdrop() {
-  const grid = new THREE.GridHelper(50, 40, 0x1a2f44, 0x101827)
-  grid.rotation.x = Math.PI / 2
-  grid.position.z = -0.2
-  grid.material.opacity = 0.25
+  const grid = new THREE.GridHelper(60, 60, 0x1a2f44, 0x0c1626)
+  grid.position.y = -0.02
+  grid.material.opacity = 0.3
   grid.material.transparent = true
+  grid.material.depthWrite = false
   scene.add(grid)
 
   const glow = new THREE.Mesh(
-    new THREE.RingGeometry(4, 18, 64),
+    new THREE.RingGeometry(4, 18, 128),
     new THREE.MeshBasicMaterial({
       color: 0x0a1c2f,
       transparent: true,
-      opacity: 0.35,
+      opacity: 0.4,
+      depthWrite: false,
     })
   )
-  glow.rotation.x = Math.PI / 2
-  glow.position.z = -0.25
+  glow.rotation.x = -Math.PI / 2
+  glow.position.y = -0.03
   scene.add(glow)
 }
 
 function createNodes() {
-  const circleGeometry = new THREE.CircleGeometry(0.5, 48)
-
   NODES.forEach((node) => {
-    const material = new THREE.MeshBasicMaterial({
-      color: node.color,
-      transparent: true,
-      opacity: 0.92,
-    })
+    const { sprite: nodeSprite, texture: nodeTexture } = createNodeSprite(node)
+    nodeSprite.position.set(0, PLANE_Y + 0.05, 0)
+    nodeSprite.renderOrder = 10
+    scene.add(nodeSprite)
+    disposableTextures.push(nodeTexture)
 
-    const mesh = new THREE.Mesh(circleGeometry, material)
-    mesh.scale.setScalar(node.radius * 2)
-    mesh.position.z = 0.05
-    mesh.renderOrder = 10
-    scene.add(mesh)
+    const { sprite: labelSprite, texture: labelTexture } = createLabelSprite(node.label)
+    labelSprite.position.set(0, PLANE_Y + LABEL_HEIGHT, 0)
+    labelSprite.renderOrder = 11
+    scene.add(labelSprite)
+    disposableTextures.push(labelTexture)
 
-    const { sprite, texture } = createLabelSprite(node.label)
-    sprite.position.z = 0.1
-    sprite.renderOrder = 11
-    scene.add(sprite)
-    disposableTextures.push(texture)
-
-    const position = new THREE.Vector3((Math.random() - 0.5) * 10, (Math.random() - 0.5) * 6, 0)
+    const angle = random() * Math.PI * 2
+    const radius = 3.5 + random() * 4.5
+    const position = new THREE.Vector3(Math.cos(angle) * radius, 0, Math.sin(angle) * radius)
     const velocity = new THREE.Vector3()
     const force = new THREE.Vector3()
 
     const state = {
       ...node,
-      mesh,
-      label: sprite,
+      sprite: nodeSprite,
+      label: labelSprite,
       position,
       velocity,
       force,
@@ -204,14 +202,13 @@ function createLinks() {
 
   LINKS.forEach((link) => {
     const group = new THREE.Group()
-    group.position.z = -0.05
+    group.position.y = PLANE_Y + 0.01
+    group.rotation.x = -Math.PI / 2
 
     const shaft = new THREE.Mesh(shaftGeometry, shaftMaterial.clone())
-    shaft.position.z = -0.02
     shaft.renderOrder = 1
 
     const arrowHead = new THREE.Mesh(arrowGeometry, arrowMaterial.clone())
-    arrowHead.position.z = -0.01
     arrowHead.renderOrder = 2
 
     group.add(shaft)
@@ -276,7 +273,7 @@ function stepSimulation() {
 
     tempDir.copy(target.position).sub(source.position)
     const distance = Math.max(tempDir.length(), 0.001)
-    const desired = link.distance ?? SIMULATION.linkDistance
+    const desired = SIMULATION.linkDistance
     const displacement = distance - desired
     const strength = SIMULATION.spring * displacement
     tempDir.normalize()
@@ -298,20 +295,23 @@ function stepSimulation() {
     }
 
     node.position.addScaledVector(node.velocity, SIMULATION.timeStep)
-    node.position.z = 0
+    node.position.y = 0
 
-    const boundary = 14
-    node.position.x = THREE.MathUtils.clamp(node.position.x, -boundary, boundary)
-    node.position.y = THREE.MathUtils.clamp(node.position.y, -boundary * 0.6, boundary * 0.6)
+    const boundaryX = 14
+    const boundaryZ = 9
+    node.position.x = THREE.MathUtils.clamp(node.position.x, -boundaryX, boundaryX)
+    node.position.z = THREE.MathUtils.clamp(node.position.z, -boundaryZ, boundaryZ)
+
+    node.velocity.y = 0
   })
 }
 
 function updateNodes() {
   nodeStates.forEach((node) => {
-    node.mesh.position.copy(node.position)
+    node.sprite.position.set(node.position.x, PLANE_Y + 0.05, node.position.z)
 
-    const labelOffset = node.radius * 1.8 + 0.35
-    node.label.position.set(node.position.x, node.position.y + labelOffset, 0.1)
+    const labelOffset = LABEL_HEIGHT + node.radius * 0.8
+    node.label.position.set(node.position.x, PLANE_Y + labelOffset, node.position.z)
   })
 }
 
@@ -321,7 +321,7 @@ function updateLinks() {
     const target = link.target
     if (!source || !target) return
 
-    tempDir.copy(target.position).sub(source.position)
+    tempDir.set(target.position.x - source.position.x, 0, target.position.z - source.position.z)
     const length = tempDir.length()
 
     if (length < 0.001) {
@@ -330,20 +330,20 @@ function updateLinks() {
     }
 
     link.group.visible = true
-    const angle = Math.atan2(tempDir.y, tempDir.x)
-    link.group.position.set(source.position.x, source.position.y, -0.05)
-    link.group.rotation.z = angle
+    const yaw = Math.atan2(tempDir.z, tempDir.x)
+    link.group.position.set(source.position.x, PLANE_Y + 0.01, source.position.z)
+    link.group.rotation.set(-Math.PI / 2, yaw, 0)
 
     const headLength = THREE.MathUtils.clamp(length * 0.2, 0.8, 3)
     const shaftLength = Math.max(length - headLength, headLength * 0.6)
     const width = Math.max(currentLinkWidth, 0.2)
 
     link.shaft.scale.set(shaftLength, width, 1)
-    link.shaft.position.set(shaftLength / 2, 0, -0.02)
+    link.shaft.position.set(shaftLength / 2, 0, 0)
 
     const headWidth = width * 1.6
     link.arrow.scale.set(headLength, headWidth, 1)
-    link.arrow.position.set(length - headLength * (2 / 3), 0, -0.01)
+    link.arrow.position.set(length - headLength * (2 / 3), 0, 0)
   })
 }
 
@@ -359,14 +359,7 @@ function resizeRenderer() {
   renderer.setSize(width, height, false)
 
   if (camera) {
-    const aspect = width / height
-    const viewSize = 14
-    const halfHeight = viewSize / 2
-    const halfWidth = halfHeight * aspect
-    camera.left = -halfWidth
-    camera.right = halfWidth
-    camera.top = halfHeight
-    camera.bottom = -halfHeight
+    camera.aspect = width / height
     camera.updateProjectionMatrix()
   }
 }
@@ -399,6 +392,44 @@ function cleanup() {
   nodeStates.length = 0
   linkStates.length = 0
   nodeMap.clear()
+}
+
+function createNodeSprite(node) {
+  const canvas = document.createElement('canvas')
+  canvas.width = 256
+  canvas.height = 256
+  const ctx = canvas.getContext('2d')
+  if (ctx) {
+    ctx.clearRect(0, 0, canvas.width, canvas.height)
+    const center = canvas.width / 2
+    const radius = center - 18
+    const gradient = ctx.createRadialGradient(center - 20, center - 20, radius * 0.3, center, center, radius)
+    gradient.addColorStop(0, '#ffffff')
+    gradient.addColorStop(1, node.color)
+    ctx.fillStyle = gradient
+    ctx.beginPath()
+    ctx.arc(center, center, radius, 0, Math.PI * 2)
+    ctx.fill()
+
+    ctx.lineWidth = 8
+    ctx.strokeStyle = 'rgba(255, 255, 255, 0.25)'
+    ctx.stroke()
+  }
+
+  const texture = new THREE.CanvasTexture(canvas)
+  texture.needsUpdate = true
+
+  const material = new THREE.SpriteMaterial({
+    map: texture,
+    transparent: true,
+    depthWrite: false,
+  })
+
+  const sprite = new THREE.Sprite(material)
+  const scale = NODE_BASE_SCALE * node.radius
+  sprite.scale.set(scale, scale, 1)
+
+  return { sprite, texture }
 }
 
 function createLabelSprite(text) {
@@ -448,6 +479,35 @@ function roundRect(ctx, x, y, width, height, radius) {
   ctx.closePath()
   ctx.fill()
   ctx.stroke()
+}
+
+function createDeterministicRandom(seed) {
+  const seedGen = xmur3(seed)
+  const rng = mulberry32(seedGen())
+  return () => rng()
+}
+
+function xmur3(str) {
+  let h = 1779033703 ^ str.length
+  for (let i = 0; i < str.length; i += 1) {
+    h = Math.imul(h ^ str.charCodeAt(i), 3432918353)
+    h = (h << 13) | (h >>> 19)
+  }
+  return function () {
+    h = Math.imul(h ^ (h >>> 16), 2246822507)
+    h = Math.imul(h ^ (h >>> 13), 3266489909)
+    return (h ^= h >>> 16) >>> 0
+  }
+}
+
+function mulberry32(a) {
+  return function () {
+    a |= 0
+    a = (a + 0x6d2b79f5) | 0
+    let t = Math.imul(a ^ (a >>> 15), 1 | a)
+    t ^= t + Math.imul(t ^ (t >>> 7), 61 | t)
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296
+  }
 }
 </script>
 
