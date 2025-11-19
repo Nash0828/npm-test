@@ -2,6 +2,7 @@ import { createRouter, createWebHistory } from 'vue-router'
 
 import ThreeScenePage from '../pages/ThreeScenePage.vue'
 import MicroservicePlanePage from '../pages/MicroservicePlanePage.vue'
+import ForceTopologyPage from '../pages/ForceTopologyPage.vue'
 
 const routes = [
   {
@@ -22,6 +23,14 @@ const routes = [
     component: MicroservicePlanePage,
     meta: {
       title: '服务网格',
+    },
+  },
+  {
+    path: '/topology',
+    name: 'topology',
+    component: ForceTopologyPage,
+    meta: {
+      title: '二维拓扑',
     },
   },
 ]
