@@ -11,6 +11,13 @@
           三维场景
         </RouterLink>
         <RouterLink
+          to="/flow-network"
+          class="nav-link"
+          active-class="is-active"
+        >
+          流动光束
+        </RouterLink>
+        <RouterLink
           to="/microservice-plane"
           class="nav-link"
           active-class="is-active"
