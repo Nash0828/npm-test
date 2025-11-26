@@ -4,6 +4,7 @@ import ThreeScenePage from '../pages/ThreeScenePage.vue'
 import MicroservicePlanePage from '../pages/MicroservicePlanePage.vue'
 import ForceTopologyPage from '../pages/ForceTopologyPage.vue'
 import FlowNetworkPage from '../pages/FlowNetworkPage.vue'
+import FlyLineTrailPage from '../pages/FlyLineTrailPage.vue'
 
 const routes = [
   {
@@ -24,6 +25,14 @@ const routes = [
     component: FlowNetworkPage,
     meta: {
       title: '流动光束',
+    },
+  },
+  {
+    path: '/fly-trail',
+    name: 'fly-trail',
+    component: FlyLineTrailPage,
+    meta: {
+      title: '飞线拖尾',
     },
   },
   {
