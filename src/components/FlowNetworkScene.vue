@@ -8,6 +8,9 @@
 import { onMounted, onBeforeUnmount, ref } from 'vue'
 import * as THREE from 'three'
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js'
+import { LineGeometry } from 'three/examples/jsm/lines/LineGeometry.js'
+import { LineMaterial } from 'three/examples/jsm/lines/LineMaterial.js'
+import { Line2 } from 'three/examples/jsm/lines/Line2.js'
 
 const canvasRef = ref(null)
 
@@ -20,9 +23,25 @@ let resizeHandler
 
 const nodeMeshes = []
 const beamLinks = []
+const lineMaterials = []
 const clock = new THREE.Clock()
 const FORWARD = new THREE.Vector3(0, 1, 0)
 const tempQuaternion = new THREE.Quaternion()
+const dropletGeometry = new THREE.CapsuleGeometry(0.16, 0.68, 8, 16)
+const dropletBaseMaterial = new THREE.MeshPhysicalMaterial({
+  color: 0x62f6ff,
+  emissive: 0x1f9dff,
+  emissiveIntensity: 1.35,
+  roughness: 0.15,
+  metalness: 0.0,
+  clearcoat: 0.6,
+  transmission: 0.65,
+  thickness: 1.1,
+  transparent: true,
+  opacity: 0.85,
+  depthWrite: false,
+  blending: THREE.AdditiveBlending
+})
 
 onMounted(() => {
   initScene()
@@ -69,6 +88,7 @@ function initScene() {
     camera.aspect = width / height
     camera.updateProjectionMatrix()
     renderer.setSize(width, height)
+    updateLineMaterialResolution(width, height)
   }
   window.addEventListener('resize', resizeHandler)
 
@@ -151,61 +171,50 @@ function createNodes() {
 
 function createLinks() {
   if (nodeMeshes.length === 0) return
-
-  const linkMaterial = new THREE.MeshBasicMaterial({
-    color: 0x1b6bff,
-    transparent: true,
-    opacity: 0.32,
-    blending: THREE.AdditiveBlending,
-    depthWrite: false
-  })
-
-  const headMaterial = new THREE.MeshBasicMaterial({
-    color: 0xfff8ce,
-    transparent: true,
-    opacity: 0.95,
-    blending: THREE.AdditiveBlending,
-    depthWrite: false
-  })
-
-  const tailMaterial = new THREE.MeshBasicMaterial({
-    color: 0x4dfdff,
-    transparent: true,
-    opacity: 0.7,
-    blending: THREE.AdditiveBlending,
-    depthWrite: false
-  })
+  beamLinks.length = 0
+  lineMaterials.length = 0
 
   const linkPairs = buildLinkPairs()
   linkPairs.forEach(([aIndex, bIndex]) => {
-    const start = nodeMeshes[aIndex].position
-    const end = nodeMeshes[bIndex].position
-    const control = start.clone().add(end).multiplyScalar(0.5)
-    control.y += 2 + Math.random() * 5
-    const curve = new THREE.QuadraticBezierCurve3(start.clone(), control, end.clone())
+    const start = nodeMeshes[aIndex].position.clone()
+    const end = nodeMeshes[bIndex].position.clone()
+    const points = buildPolylinePoints(start, end)
+    const positions = []
+    points.forEach((point) => {
+      positions.push(point.x, point.y, point.z)
+    })
 
-    const tubeGeometry = new THREE.TubeGeometry(curve, 64, 0.08, 8, false)
-    const tube = new THREE.Mesh(tubeGeometry, linkMaterial.clone())
-    tube.frustumCulled = false
-    scene.add(tube)
+    const geometry = new LineGeometry()
+    geometry.setPositions(positions)
 
-    const beamHead = new THREE.Mesh(new THREE.CapsuleGeometry(0.25, 0.5, 8, 16), headMaterial.clone())
-    beamHead.frustumCulled = false
-    scene.add(beamHead)
+    const lineMaterial = new LineMaterial({
+      color: 0x1b6bff,
+      linewidth: 0.0042,
+      transparent: true,
+      opacity: 0.88,
+      depthWrite: false,
+      blending: THREE.AdditiveBlending
+    })
+    lineMaterial.toneMapped = false
+    lineMaterials.push(lineMaterial)
 
-    const beamTail = new THREE.Mesh(new THREE.CylinderGeometry(0.06, 0.24, 1, 16, true), tailMaterial.clone())
-    beamTail.frustumCulled = false
-    scene.add(beamTail)
+    const polyLine = new Line2(geometry, lineMaterial)
+    polyLine.frustumCulled = false
+    polyLine.computeLineDistances()
+    scene.add(polyLine)
+
+    const droplet = createDropletMesh()
+    scene.add(droplet)
 
     beamLinks.push({
-      curve,
-      beamHead,
-      beamTail,
-      speed: 0.05 + Math.random() * 0.07,
-      tailSpan: 0.08 + Math.random() * 0.07,
+      polyline: buildPolylineMeta(points),
+      droplet,
+      speed: 0.06 + Math.random() * 0.05,
       offset: Math.random()
     })
   })
+
+  updateLineMaterialResolution(window.innerWidth, window.innerHeight)
 }
 
 function buildLinkPairs() {
@@ -238,6 +247,78 @@ function buildLinkPairs() {
   return result
 }
 
+function buildPolylinePoints(start, end) {
+  const bendOffset = new THREE.Vector3((Math.random() - 0.5) * 6, 3 + Math.random() * 5, (Math.random() - 0.5) * 6)
+  const firstBend = start.clone().lerp(end, 0.33).add(bendOffset)
+  const secondBend = start.clone().lerp(end, 0.66).add(bendOffset.clone().multiplyScalar(0.6))
+  return [start.clone(), firstBend, secondBend, end.clone()]
+}
+
+function buildPolylineMeta(points) {
+  const clonedPoints = points.map((point) => point.clone())
+  const segments = []
+  let totalLength = 0
+
+  for (let i = 0; i < clonedPoints.length - 1; i += 1) {
+    const startPoint = clonedPoints[i]
+    const endPoint = clonedPoints[i + 1]
+    const length = startPoint.distanceTo(endPoint)
+    segments.push({
+      start: startPoint,
+      end: endPoint,
+      length,
+      startDistance: totalLength
+    })
+    totalLength += length
+  }
+
+  return {
+    points: clonedPoints,
+    segments,
+    totalLength
+  }
+}
+
+function getPolylinePoint(polyline, t) {
+  if (!polyline) {
+    return new THREE.Vector3()
+  }
+
+  if (polyline.totalLength === 0 || polyline.points.length === 0) {
+    const fallbackPoint = polyline.points[polyline.points.length - 1]
+    return fallbackPoint ? fallbackPoint.clone() : new THREE.Vector3()
+  }
+
+  const clampedT = THREE.MathUtils.clamp(t, 0, 1)
+  const distanceTarget = clampedT * polyline.totalLength
+
+  for (let i = 0; i < polyline.segments.length; i += 1) {
+    const segment = polyline.segments[i]
+    const segmentEndDistance = segment.startDistance + segment.length
+    if (distanceTarget <= segmentEndDistance || i === polyline.segments.length - 1) {
+      const localDistance = distanceTarget - segment.startDistance
+      const segmentT = segment.length === 0 ? 0 : localDistance / segment.length
+      return segment.start.clone().lerp(segment.end, THREE.MathUtils.clamp(segmentT, 0, 1))
+    }
+  }
+
+  return polyline.points[polyline.points.length - 1].clone()
+}
+
+function createDropletMesh() {
+  const droplet = new THREE.Mesh(dropletGeometry, dropletBaseMaterial.clone())
+  droplet.scale.set(0.65, 1.8, 0.65)
+  droplet.frustumCulled = false
+  return droplet
+}
+
+function updateLineMaterialResolution(width, height) {
+  const ratio = window.devicePixelRatio || 1
+  lineMaterials.forEach((material) => {
+    material.resolution.set(width * ratio, height * ratio)
+  })
+}
+
 function animate() {
   animationId = requestAnimationFrame(animate)
   const elapsed = clock.getElapsedTime()
@@ -249,30 +330,23 @@ function animate() {
 
 function updateBeams(elapsed) {
   beamLinks.forEach((link) => {
-    const { curve, beamHead, beamTail, speed, tailSpan, offset } = link
+    const { polyline, droplet, speed, offset } = link
     const progress = (elapsed * speed + offset) % 1
-    const headPoint = curve.getPointAt(progress)
-    const previousPoint = curve.getPointAt(Math.max(progress - 0.002, 0))
-    const headVector = headPoint.clone().sub(previousPoint)
-    const direction = headVector.lengthSq() === 0 ? FORWARD : headVector.normalize()
+    const headPoint = getPolylinePoint(polyline, progress)
+    const previousPoint = getPolylinePoint(polyline, Math.max(progress - 0.003, 0))
+    const directionVector = headPoint.clone().sub(previousPoint)
+    const direction = directionVector.lengthSq() === 0 ? FORWARD : directionVector.normalize()
 
-    beamHead.position.copy(headPoint)
-    beamHead.quaternion.setFromUnitVectors(FORWARD, direction)
-    const headScale = 1 + Math.sin((elapsed + offset) * 3) * 0.1
-    beamHead.scale.set(headScale, headScale, headScale)
+    droplet.position.copy(headPoint)
+    tempQuaternion.setFromUnitVectors(FORWARD, direction)
+    droplet.quaternion.copy(tempQuaternion)
 
-    const tailStart = Math.max(progress - tailSpan, 0)
-    const tailPoint = curve.getPointAt(tailStart)
-    const segment = headPoint.clone().sub(tailPoint)
-    const tailLength = Math.max(segment.length(), 0.05)
-    const midPoint = headPoint.clone().add(tailPoint).multiplyScalar(0.5)
-    const tailDirection = segment.lengthSq() === 0 ? FORWARD : segment.clone().normalize()
-    tempQuaternion.setFromUnitVectors(FORWARD, tailDirection)
-
-    beamTail.position.copy(midPoint)
-    beamTail.quaternion.copy(tempQuaternion)
-    beamTail.scale.set(1, tailLength, 1)
-    beamTail.material.opacity = 0.35 + Math.sin((elapsed + offset) * 4) * 0.25
+    const stretch = 1.3 + Math.sin((elapsed + offset) * 3.8) * 0.2
+    const radiusPulse = 0.65 + Math.sin((elapsed + offset) * 2.6) * 0.08
+    droplet.scale.set(radiusPulse, stretch, radiusPulse)
+    if (droplet.material && 'emissiveIntensity' in droplet.material) {
+      droplet.material.emissiveIntensity = 1.2 + Math.sin((elapsed + offset) * 5) * 0.4
+    }
   })
 }
 
