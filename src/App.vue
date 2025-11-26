@@ -38,6 +38,13 @@
         >
           飞线拖尾
         </RouterLink>
+        <RouterLink
+          to="/polyline-trail"
+          class="nav-link"
+          active-class="is-active"
+        >
+          折线路径拖尾
+        </RouterLink>
       </nav>
     </header>
 
