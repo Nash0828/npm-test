@@ -24,10 +24,11 @@ let resizeHandler
 const nodeMeshes = []
 const beamLinks = []
 const lineMaterials = []
+const LINE_WIDTH = 0.012 // Base width for flow beams so they stay legible on 4K
 const clock = new THREE.Clock()
 const FORWARD = new THREE.Vector3(0, 1, 0)
 const tempQuaternion = new THREE.Quaternion()
-const dropletGeometry = new THREE.CapsuleGeometry(0.16, 0.68, 8, 16)
+const dropletGeometry = createDropletGeometry()
 const dropletBaseMaterial = new THREE.MeshPhysicalMaterial({
   color: 0x62f6ff,
   emissive: 0x1f9dff,
@@ -179,6 +180,8 @@ function createLinks() {
     const start = nodeMeshes[aIndex].position.clone()
     const end = nodeMeshes[bIndex].position.clone()
     const points = buildPolylinePoints(start, end)
+    // Cache the polyline metadata once so we can reuse it for the droplet motion
+    const polylineMeta = buildPolylineMeta(points)
     const positions = []
     points.forEach((point) => {
       positions.push(point.x, point.y, point.z)
@@ -189,7 +192,7 @@ function createLinks() {
 
     const lineMaterial = new LineMaterial({
       color: 0x1b6bff,
-      linewidth: 0.0042,
+      linewidth: LINE_WIDTH,
       transparent: true,
       opacity: 0.88,
       depthWrite: false,
@@ -204,10 +207,16 @@ function createLinks() {
     scene.add(polyLine)
 
     const droplet = createDropletMesh()
+    const initialSample = samplePolyline(polylineMeta, 0)
+    droplet.position.copy(initialSample.point)
+    if (initialSample.segment) {
+      tempQuaternion.setFromUnitVectors(FORWARD, initialSample.segment.direction)
+      droplet.quaternion.copy(tempQuaternion)
+    }
     scene.add(droplet)
 
     beamLinks.push({
-      polyline: buildPolylineMeta(points),
+      polyline: polylineMeta,
       droplet,
       speed: 0.06 + Math.random() * 0.05,
       offset: Math.random()
@@ -262,12 +271,16 @@ function buildPolylineMeta(points) {
   for (let i = 0; i < clonedPoints.length - 1; i += 1) {
     const startPoint = clonedPoints[i]
     const endPoint = clonedPoints[i + 1]
-    const length = startPoint.distanceTo(endPoint)
+    const direction = endPoint.clone().sub(startPoint)
+    const length = direction.length()
+    const normalizedDirection =
+      length === 0 ? new THREE.Vector3().copy(FORWARD) : direction.clone().divideScalar(length)
     segments.push({
       start: startPoint,
       end: endPoint,
       length,
-      startDistance: totalLength
+      startDistance: totalLength,
+      direction: normalizedDirection
     })
     totalLength += length
   }
@@ -279,14 +292,30 @@ function buildPolylineMeta(points) {
   }
 }
 
-function getPolylinePoint(polyline, t) {
-  if (!polyline) {
-    return new THREE.Vector3()
+function createDropletMesh() {
+  const droplet = new THREE.Mesh(dropletGeometry, dropletBaseMaterial.clone())
+  droplet.scale.set(0.65, 1.8, 0.65)
+  droplet.frustumCulled = false
+  return droplet
+}
+
+function samplePolyline(polyline, t) {
+  // Returns both the point and the owning segment so we can align tangents precisely at bends
+  if (!polyline || polyline.points.length === 0) {
+    return {
+      point: new THREE.Vector3(),
+      segment: null,
+      segmentT: 0
+    }
   }
 
-  if (polyline.totalLength === 0 || polyline.points.length === 0) {
+  if (polyline.totalLength === 0) {
     const fallbackPoint = polyline.points[polyline.points.length - 1]
-    return fallbackPoint ? fallbackPoint.clone() : new THREE.Vector3()
+    return {
+      point: fallbackPoint ? fallbackPoint.clone() : new THREE.Vector3(),
+      segment: polyline.segments[polyline.segments.length - 1] ?? null,
+      segmentT: 0
+    }
   }
 
   const clampedT = THREE.MathUtils.clamp(t, 0, 1)
@@ -297,19 +326,39 @@ function getPolylinePoint(polyline, t) {
     const segmentEndDistance = segment.startDistance + segment.length
     if (distanceTarget <= segmentEndDistance || i === polyline.segments.length - 1) {
       const localDistance = distanceTarget - segment.startDistance
-      const segmentT = segment.length === 0 ? 0 : localDistance / segment.length
-      return segment.start.clone().lerp(segment.end, THREE.MathUtils.clamp(segmentT, 0, 1))
+      const safeLength = segment.length || 1e-6
+      const segmentT = segment.length === 0 ? 0 : localDistance / safeLength
+      const point = segment.start.clone().lerp(segment.end, THREE.MathUtils.clamp(segmentT, 0, 1))
+      return { point, segment, segmentT }
     }
   }
 
-  return polyline.points[polyline.points.length - 1].clone()
+  const lastSegment = polyline.segments[polyline.segments.length - 1]
+  return {
+    point: lastSegment.end.clone(),
+    segment: lastSegment,
+    segmentT: 1
+  }
 }
 
-function createDropletMesh() {
-  const droplet = new THREE.Mesh(dropletGeometry, dropletBaseMaterial.clone())
-  droplet.scale.set(0.65, 1.8, 0.65)
-  droplet.frustumCulled = false
-  return droplet
+function createDropletGeometry() {
+  // Revolve a slightly asymmetric outline to emulate a teardrop silhouette
+  const profilePoints = []
+  const totalHeight = 2
+  for (let i = 0; i <= 18; i += 1) {
+    const progress = i / 18
+    const curvedProgress = Math.pow(progress, 0.75)
+    const width = THREE.MathUtils.lerp(0.08, 0.58, Math.sin(curvedProgress * Math.PI))
+    const height = progress * totalHeight
+    profilePoints.push(new THREE.Vector2(width, height))
+  }
+  // Sharp tip
+  profilePoints.push(new THREE.Vector2(0, totalHeight + 0.3))
+
+  const geometry = new THREE.LatheGeometry(profilePoints, 48)
+  geometry.translate(0, -(totalHeight / 2), 0)
+  geometry.computeVertexNormals()
+  return geometry
 }
 
 function updateLineMaterialResolution(width, height) {
@@ -332,14 +381,15 @@ function updateBeams(elapsed) {
   beamLinks.forEach((link) => {
     const { polyline, droplet, speed, offset } = link
     const progress = (elapsed * speed + offset) % 1
-    const headPoint = getPolylinePoint(polyline, progress)
-    const previousPoint = getPolylinePoint(polyline, Math.max(progress - 0.003, 0))
-    const directionVector = headPoint.clone().sub(previousPoint)
-    const direction = directionVector.lengthSq() === 0 ? FORWARD : directionVector.normalize()
+    // Sample the polyline with tangent data so the droplet hugs every corner
+    const sample = samplePolyline(polyline, progress)
+    const headPoint = sample.point
+    const direction = sample.segment?.direction ?? FORWARD
 
     droplet.position.copy(headPoint)
     tempQuaternion.setFromUnitVectors(FORWARD, direction)
-    droplet.quaternion.copy(tempQuaternion)
+    // Slerp yields a softer steering curve instead of an instantaneous snap at bends
+    droplet.quaternion.slerp(tempQuaternion, 0.45)
 
     const stretch = 1.3 + Math.sin((elapsed + offset) * 3.8) * 0.2
     const radiusPulse = 0.65 + Math.sin((elapsed + offset) * 2.6) * 0.08
