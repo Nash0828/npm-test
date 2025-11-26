@@ -31,6 +31,13 @@
         >
           二维拓扑
         </RouterLink>
+        <RouterLink
+          to="/fly-trail"
+          class="nav-link"
+          active-class="is-active"
+        >
+          飞线拖尾
+        </RouterLink>
       </nav>
     </header>
 
