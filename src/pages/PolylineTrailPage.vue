@@ -38,11 +38,10 @@ const basePoints = [
 ]
 
 const vertexShader = /* glsl */ `
-  attribute float aProgress;
   varying float vProgress;
 
   void main() {
-    vProgress = aProgress;
+    vProgress = uv.y;
     vec4 modelPosition = modelViewMatrix * vec4(position, 1.0);
     gl_Position = projectionMatrix * modelPosition;
   }
@@ -118,18 +117,15 @@ const addLights = () => {
 // 构建折线几何并挂载自定义材质
 const addPolyline = () => {
   const positions = new Float32Array(basePoints.length * 3)
-  const progress = new Float32Array(basePoints.length)
 
   basePoints.forEach((point, index) => {
     positions[index * 3] = point.x
     positions[index * 3 + 1] = point.y
     positions[index * 3 + 2] = point.z
-    progress[index] = index / (basePoints.length - 1)
   })
 
   const geometry = new THREE.BufferGeometry()
   geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3))
-  geometry.setAttribute('aProgress', new THREE.BufferAttribute(progress, 1))
   geometry.computeBoundingSphere()
 
   const shaderMaterial = new THREE.ShaderMaterial({
@@ -139,10 +135,17 @@ const addPolyline = () => {
     transparent: true,
     depthWrite: false,
     blending: THREE.AdditiveBlending,
+    side: THREE.DoubleSide,
   })
 
-  const trailLine = new THREE.Line(geometry, shaderMaterial)
-  scene.add(trailLine)
+  // 使用 TubeGeometry 构建具备截面半径的拖尾，使视觉上更“粗”
+  const curvePath = new THREE.CurvePath()
+  for (let i = 0; i < basePoints.length - 1; i += 1) {
+    curvePath.add(new THREE.LineCurve3(basePoints[i], basePoints[i + 1]))
+  }
+  const tubeGeometry = new THREE.TubeGeometry(curvePath, 240, 0.025, 16, false)
+  const trailMesh = new THREE.Mesh(tubeGeometry, shaderMaterial)
+  scene.add(trailMesh)
 
   // 额外绘制微弱底线方便观察路径
   const baseMaterial = new THREE.LineDashedMaterial({
