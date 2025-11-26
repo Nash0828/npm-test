@@ -45,6 +45,13 @@
         >
           折线路径拖尾
         </RouterLink>
+        <RouterLink
+          to="/cube-polylines"
+          class="nav-link"
+          active-class="is-active"
+        >
+          正交折线网络
+        </RouterLink>
       </nav>
     </header>
 

@@ -6,6 +6,7 @@ import ForceTopologyPage from '../pages/ForceTopologyPage.vue'
 import FlowNetworkPage from '../pages/FlowNetworkPage.vue'
 import FlyLineTrailPage from '../pages/FlyLineTrailPage.vue'
 import PolylineTrailPage from '../pages/PolylineTrailPage.vue'
+import CubePolylinePage from '../pages/CubePolylinePage.vue'
 
 const routes = [
   {
@@ -42,6 +43,14 @@ const routes = [
     component: PolylineTrailPage,
     meta: {
       title: '折线路径拖尾',
+    },
+  },
+  {
+    path: '/cube-polylines',
+    name: 'cube-polylines',
+    component: CubePolylinePage,
+    meta: {
+      title: '正交折线网络',
     },
   },
   {
