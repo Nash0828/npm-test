@@ -5,6 +5,7 @@ import MicroservicePlanePage from '../pages/MicroservicePlanePage.vue'
 import ForceTopologyPage from '../pages/ForceTopologyPage.vue'
 import FlowNetworkPage from '../pages/FlowNetworkPage.vue'
 import FlyLineTrailPage from '../pages/FlyLineTrailPage.vue'
+import PolylineTrailPage from '../pages/PolylineTrailPage.vue'
 
 const routes = [
   {
@@ -33,6 +34,14 @@ const routes = [
     component: FlyLineTrailPage,
     meta: {
       title: '飞线拖尾',
+    },
+  },
+  {
+    path: '/polyline-trail',
+    name: 'polyline-trail',
+    component: PolylineTrailPage,
+    meta: {
+      title: '折线路径拖尾',
     },
   },
   {
