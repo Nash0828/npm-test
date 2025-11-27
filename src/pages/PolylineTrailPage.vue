@@ -41,7 +41,7 @@ const vertexShader = /* glsl */ `
   varying float vProgress;
 
   void main() {
-    vProgress = uv.y;
+    vProgress = uv.x;
     vec4 modelPosition = modelViewMatrix * vec4(position, 1.0);
     gl_Position = projectionMatrix * modelPosition;
   }
