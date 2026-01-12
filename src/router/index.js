@@ -7,6 +7,7 @@ import FlowNetworkPage from '../pages/FlowNetworkPage.vue'
 import FlyLineTrailPage from '../pages/FlyLineTrailPage.vue'
 import PolylineTrailPage from '../pages/PolylineTrailPage.vue'
 import CubePolylinePage from '../pages/CubePolylinePage.vue'
+import GradientGridPage from '../pages/GradientGridPage.vue'
 
 const routes = [
   {
@@ -67,6 +68,14 @@ const routes = [
     component: ForceTopologyPage,
     meta: {
       title: '二维拓扑',
+    },
+  },
+  {
+    path: '/gradient-grid',
+    name: 'gradient-grid',
+    component: GradientGridPage,
+    meta: {
+      title: '渐变网格',
     },
   },
 ]
