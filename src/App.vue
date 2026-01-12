@@ -52,6 +52,13 @@
         >
           正交折线网络
         </RouterLink>
+        <RouterLink
+          to="/gradient-grid"
+          class="nav-link"
+          active-class="is-active"
+        >
+          渐变网格
+        </RouterLink>
       </nav>
     </header>
 
