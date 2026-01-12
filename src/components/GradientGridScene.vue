@@ -68,7 +68,6 @@ function initScene() {
 
   gridMesh = createGradientGrid({
     size: 220,
-    cellSize: 2.0,
     majorCellSize: 10.0
   })
   scene.add(gridMesh)
@@ -79,7 +78,7 @@ function initScene() {
   resizeObserver.observe(canvas)
 }
 
-function createGradientGrid({ size, cellSize, majorCellSize }) {
+function createGradientGrid({ size, majorCellSize }) {
   const geometry = new THREE.PlaneGeometry(size, size, 1, 1)
 
   const material = new THREE.ShaderMaterial({
@@ -90,20 +89,14 @@ function createGradientGrid({ size, cellSize, majorCellSize }) {
     polygonOffsetFactor: -1,
     polygonOffsetUnits: -1,
     uniforms: {
-      uCellSize: { value: cellSize },
       uMajorCellSize: { value: majorCellSize },
-      uMinorColorNear: { value: new THREE.Color('#1a6aa6') },
-      uMinorColorFar: { value: new THREE.Color('#0b2236') },
       uMajorColorNear: { value: new THREE.Color('#55d3ff') },
       uMajorColorFar: { value: new THREE.Color('#133a55') },
-      uMinorOpacity: { value: 0.35 },
       uMajorOpacity: { value: 0.55 },
       // z 越小（越负），zRef = -z 越大，blur 越强
       uBlurStart: { value: 0.0 },
       uBlurEnd: { value: 90.0 },
       // 线宽是“格子比例”（0~0.5），越远越粗、越软
-      uMinorWidthNear: { value: 0.018 },
-      uMinorWidthFar: { value: 0.05 },
       uMajorWidthNear: { value: 0.03 },
       uMajorWidthFar: { value: 0.08 },
       uSoftnessNear: { value: 1.2 },
@@ -123,18 +116,12 @@ function createGradientGrid({ size, cellSize, majorCellSize }) {
     fragmentShader: `
       precision highp float;
 
-      uniform float uCellSize;
       uniform float uMajorCellSize;
-      uniform vec3 uMinorColorNear;
-      uniform vec3 uMinorColorFar;
       uniform vec3 uMajorColorNear;
       uniform vec3 uMajorColorFar;
-      uniform float uMinorOpacity;
       uniform float uMajorOpacity;
       uniform float uBlurStart;
       uniform float uBlurEnd;
-      uniform float uMinorWidthNear;
-      uniform float uMinorWidthFar;
       uniform float uMajorWidthNear;
       uniform float uMajorWidthFar;
       uniform float uSoftnessNear;
@@ -160,14 +147,11 @@ function createGradientGrid({ size, cellSize, majorCellSize }) {
         float blurT = smoothstep(uBlurStart, uBlurEnd, zRef);
 
         float softness = mix(uSoftnessNear, uSoftnessFar, blurT);
-        float minorWidth = mix(uMinorWidthNear, uMinorWidthFar, blurT);
         float majorWidth = mix(uMajorWidthNear, uMajorWidthFar, blurT);
 
-        float minor = gridMask(worldXZ, uCellSize, minorWidth, softness);
         float major = gridMask(worldXZ, uMajorCellSize, majorWidth, softness);
 
         // 颜色也做随 blur 渐变（更像“雾化”）
-        vec3 minorColor = mix(uMinorColorNear, uMinorColorFar, blurT);
         vec3 majorColor = mix(uMajorColorNear, uMajorColorFar, blurT);
 
         float r = length(worldXZ);
@@ -176,8 +160,8 @@ function createGradientGrid({ size, cellSize, majorCellSize }) {
         // 随 blur 额外衰减对比度，让远处更“糊”
         float contrast = mix(1.0, 0.55, blurT);
 
-        vec3 color = minorColor * (minor * uMinorOpacity) + majorColor * (major * uMajorOpacity);
-        float alpha = clamp((minor * uMinorOpacity + major * uMajorOpacity) * radialFade * contrast, 0.0, 1.0);
+        vec3 color = majorColor * (major * uMajorOpacity);
+        float alpha = clamp((major * uMajorOpacity) * radialFade * contrast, 0.0, 1.0);
 
         // 太淡就丢弃，减少 overdraw
         if (alpha < 0.01) discard;
