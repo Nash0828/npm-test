@@ -8,6 +8,7 @@ import FlyLineTrailPage from '../pages/FlyLineTrailPage.vue'
 import PolylineTrailPage from '../pages/PolylineTrailPage.vue'
 import CubePolylinePage from '../pages/CubePolylinePage.vue'
 import GradientGridPage from '../pages/GradientGridPage.vue'
+import PositiveZGradientGridPage from '../pages/PositiveZGradientGridPage.vue'
 
 const routes = [
   {
@@ -76,6 +77,14 @@ const routes = [
     component: GradientGridPage,
     meta: {
       title: '渐变网格',
+    },
+  },
+  {
+    path: '/positive-z-grid',
+    name: 'positive-z-grid',
+    component: PositiveZGradientGridPage,
+    meta: {
+      title: '正Z渐变网格',
     },
   },
 ]
