@@ -18,6 +18,7 @@ let controls
 let animationId
 let resizeObserver
 let gridMesh
+let axesHelper
 
 onMounted(() => {
   initScene()
@@ -56,6 +57,10 @@ function initScene() {
   dirLight.position.set(20, 35, -10)
   scene.add(dirLight)
 
+  axesHelper = new THREE.AxesHelper(18)
+  axesHelper.position.y = 0.02
+  scene.add(axesHelper)
+
   const ground = new THREE.Mesh(
     new THREE.CircleGeometry(220, 96),
     new THREE.MeshStandardMaterial({
@@ -71,7 +76,6 @@ function initScene() {
   gridMesh = createPositiveZGradientGrid({
     xSize: 240,
     zSize: 220,
-    minorCellSize: 2.0,
     majorCellSize: 10.0
   })
   scene.add(gridMesh)
@@ -82,7 +86,7 @@ function initScene() {
   resizeObserver.observe(canvas)
 }
 
-function createPositiveZGradientGrid({ xSize, zSize, minorCellSize, majorCellSize }) {
+function createPositiveZGradientGrid({ xSize, zSize, majorCellSize }) {
   // 先做一个 XZ 平面，再把它平移到 z>=0（0..zSize）
   const geometry = new THREE.PlaneGeometry(xSize, zSize, 1, 1)
   geometry.rotateX(-Math.PI / 2)
@@ -96,25 +100,18 @@ function createPositiveZGradientGrid({ xSize, zSize, minorCellSize, majorCellSiz
     polygonOffsetFactor: -1,
     polygonOffsetUnits: -1,
     uniforms: {
-      uMinorCellSize: { value: minorCellSize },
       uMajorCellSize: { value: majorCellSize },
       uZStart: { value: 0.0 },
       uZEnd: { value: zSize },
-      uMinorColorNear: { value: new THREE.Color('#2a6c9a') },
-      uMinorColorFar: { value: new THREE.Color('#7fe7ff') },
-      uMajorColorNear: { value: new THREE.Color('#39b4ff') },
+      uMajorColorNear: { value: new THREE.Color('#2a6c9a') },
       uMajorColorFar: { value: new THREE.Color('#b8f4ff') },
       // z 越小越“模糊”（更宽、更软、更透明），z 越大越“清晰”
-      uMinorOpacityNear: { value: 0.06 },
-      uMinorOpacityFar: { value: 0.22 },
-      uMajorOpacityNear: { value: 0.12 },
-      uMajorOpacityFar: { value: 0.65 },
-      uMinorWidthNear: { value: 0.12 },
-      uMinorWidthFar: { value: 0.03 },
-      uMajorWidthNear: { value: 0.18 },
+      uMajorOpacityNear: { value: 0.14 },
+      uMajorOpacityFar: { value: 0.68 },
+      uMajorWidthNear: { value: 0.22 },
       uMajorWidthFar: { value: 0.05 },
-      uSoftnessNear: { value: 6.0 },
-      uSoftnessFar: { value: 1.6 },
+      uSoftnessNear: { value: 7.5 },
+      uSoftnessFar: { value: 1.5 },
       // 轻微半径淡出，避免边缘太抢眼
       uFadeStart: { value: 35.0 },
       uFadeEnd: { value: 160.0 }
@@ -130,23 +127,16 @@ function createPositiveZGradientGrid({ xSize, zSize, minorCellSize, majorCellSiz
     fragmentShader: `
       precision highp float;
 
-      uniform float uMinorCellSize;
       uniform float uMajorCellSize;
       uniform float uZStart;
       uniform float uZEnd;
 
-      uniform vec3 uMinorColorNear;
-      uniform vec3 uMinorColorFar;
       uniform vec3 uMajorColorNear;
       uniform vec3 uMajorColorFar;
 
-      uniform float uMinorOpacityNear;
-      uniform float uMinorOpacityFar;
       uniform float uMajorOpacityNear;
       uniform float uMajorOpacityFar;
 
-      uniform float uMinorWidthNear;
-      uniform float uMinorWidthFar;
       uniform float uMajorWidthNear;
       uniform float uMajorWidthFar;
 
@@ -167,7 +157,7 @@ function createPositiveZGradientGrid({ xSize, zSize, minorCellSize, majorCellSiz
       }
 
       void main() {
-        // 仅显示 z 轴正值区域
+        // 仅显示 z 轴正值区域（z<0 完全不显示网格）
         if (vWorldPos.z < 0.0) discard;
 
         vec2 worldXZ = vWorldPos.xz;
@@ -176,26 +166,22 @@ function createPositiveZGradientGrid({ xSize, zSize, minorCellSize, majorCellSiz
         float clarity = smoothstep(uZStart, uZEnd, vWorldPos.z);
 
         float softness = mix(uSoftnessNear, uSoftnessFar, clarity);
-        float minorWidth = mix(uMinorWidthNear, uMinorWidthFar, clarity);
         float majorWidth = mix(uMajorWidthNear, uMajorWidthFar, clarity);
 
-        float minor = gridMask(worldXZ, uMinorCellSize, minorWidth, softness);
         float major = gridMask(worldXZ, uMajorCellSize, majorWidth, softness);
 
-        vec3 minorColor = mix(uMinorColorNear, uMinorColorFar, clarity);
         vec3 majorColor = mix(uMajorColorNear, uMajorColorFar, clarity);
 
-        float minorOpacity = mix(uMinorOpacityNear, uMinorOpacityFar, clarity);
         float majorOpacity = mix(uMajorOpacityNear, uMajorOpacityFar, clarity);
 
         float r = length(worldXZ);
         float radialFade = 1.0 - smoothstep(uFadeStart, uFadeEnd, r);
 
-        // 低 z 处再额外降低对比度，让它更“糊”
-        float contrast = mix(0.55, 1.0, clarity);
+        // z 越小越“糊”：更低对比度；z 越大更“清晰”
+        float contrast = mix(0.45, 1.0, clarity);
 
-        vec3 color = minorColor * (minor * minorOpacity) + majorColor * (major * majorOpacity);
-        float alpha = (minor * minorOpacity + major * majorOpacity) * radialFade * contrast;
+        vec3 color = majorColor * (major * majorOpacity);
+        float alpha = (major * majorOpacity) * radialFade * contrast;
 
         if (alpha < 0.01) discard;
         gl_FragColor = vec4(color, clamp(alpha, 0.0, 1.0));
@@ -251,6 +237,7 @@ function cleanup() {
   camera = null
   controls = null
   gridMesh = null
+  axesHelper = null
 }
 </script>
 
