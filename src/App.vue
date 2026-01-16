@@ -66,6 +66,13 @@
         >
           正Z渐变网格
         </RouterLink>
+        <RouterLink
+          to="/chimney-brush"
+          class="nav-link"
+          active-class="is-active"
+        >
+          烟囱笔锋
+        </RouterLink>
       </nav>
     </header>
 

@@ -9,6 +9,7 @@ import PolylineTrailPage from '../pages/PolylineTrailPage.vue'
 import CubePolylinePage from '../pages/CubePolylinePage.vue'
 import GradientGridPage from '../pages/GradientGridPage.vue'
 import PositiveZGradientGridPage from '../pages/PositiveZGradientGridPage.vue'
+import ChimneyBrushPage from '../pages/ChimneyBrushPage.vue'
 
 const routes = [
   {
@@ -85,6 +86,14 @@ const routes = [
     component: PositiveZGradientGridPage,
     meta: {
       title: '正Z渐变网格',
+    },
+  },
+  {
+    path: '/chimney-brush',
+    name: 'chimney-brush',
+    component: ChimneyBrushPage,
+    meta: {
+      title: '烟囱笔锋',
     },
   },
 ]
